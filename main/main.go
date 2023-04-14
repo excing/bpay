@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"com.blendiv.pay/ent"
@@ -16,9 +17,11 @@ import (
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
 	_ "github.com/jackc/pgx/v4/stdlib"
+	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 )
 
+// Config 配置
 type Config struct {
 	PGSQL string `json:"pgsql"`
 }
@@ -81,9 +84,8 @@ func main() {
 
 	router.Use(gzip.Gzip(gzip.DefaultCompression))
 
-	router.GET("create", func(c *gin.Context) {
-		c.String(200, "create order id")
-	})
+	router.GET("buy", buy)
+	router.GET("credits", credits)
 
 	if err = g.Wait(); err != nil {
 		panic(err)
@@ -91,6 +93,41 @@ func main() {
 
 }
 
+func buy(c *gin.Context) {
+	fee := QueryDefaultIntByGinContext(c, "fee", 0)
+	cip := c.ClientIP()
+	rip := c.RemoteIP()
+
+	c.JSON(200, gin.H{
+		"fee": fee,
+		"cip": cip,
+		"rip": rip,
+	})
+}
+
 func credits(c *gin.Context) {
 
+}
+
+// QueryDefaultIntByGinContext returns 指定 key 的 int 值
+func QueryDefaultIntByGinContext(c *gin.Context, key string, def int) int {
+	v, ok := c.GetQuery(key)
+	if !ok {
+		return def
+	}
+	i, err := strconv.Atoi(v)
+	if err != nil {
+		return def
+	}
+	return i
+}
+
+// QueryIntByGinContext returns 指定 key 的 int 值
+func QueryIntByGinContext(c *gin.Context, key string) (int, error) {
+	v, ok := c.GetQuery(key)
+	if !ok {
+		return 0, errors.Errorf("Missing argument(%v)", key)
+	}
+	i, err := strconv.Atoi(v)
+	return i, err
 }
