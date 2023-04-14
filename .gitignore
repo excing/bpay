@@ -20,3 +20,5 @@ ent/*
 !ent/generate.go
 
 .DS_Store
+
+config.json
