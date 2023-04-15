@@ -8,7 +8,7 @@ require (
 	github.com/gin-gonic/gin v1.9.0
 	github.com/jackc/pgx/v4 v4.18.1
 	github.com/pkg/errors v0.8.1
-	golang.org/x/sync v0.1.0
+	github.com/sashabaranov/go-openai v1.7.0
 )
 
 require (

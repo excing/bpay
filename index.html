@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <title></title>
+</head>
+
+<body>
+  <script src="https://cdn.jsdelivr.net/npm/sse.js@0.6.1/lib/sse.min.js"></script>
+  <script>
+    var source = new SSE(
+      "http://localhost:3001/v1/chat/completions", {
+      headers: {
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+      payload: JSON.stringify({ "model": "gpt-3.5-turbo", "messages": [{ "role": "system", "content": "你是一个友善的助手。" }, { "role": "user", "content": "Hi" }, { "role": "user", "content": "Hi" }], "max_tokens": 2000, "stream": true, "temperature": 0 }),
+    });
+
+    source.addEventListener("data", function (e) {
+      console.log(e.data);
+    });
+
+    source.addEventListener("error", function (e) {
+      console.error(e.data);
+    });
+
+    source.stream();
+  </script>
+</body>
+
+</html>
