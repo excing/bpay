@@ -1,6 +1,8 @@
 package schema
 
 import (
+	"time"
+
 	"entgo.io/ent"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
@@ -14,10 +16,17 @@ type User struct {
 // Fields of the User.
 func (User) Fields() []ent.Field {
 	return []ent.Field{
-		field.String("ip").Optional(),
-		field.String("token").Optional(),
+		field.String("ip"),
+		field.String("token").Unique(),
 		field.Int("credits"),
 		field.Int("free_credits"),
+		field.Time("created_at").
+			Default(time.Now),
+		field.Time("updated_at").
+			Optional().
+			Default(time.Now).
+			UpdateDefault(time.Now).
+			StructTag(`json:"-"`),
 	}
 }
 

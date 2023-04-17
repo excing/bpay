@@ -21,6 +21,9 @@ import (
 	_ "github.com/jackc/pgx/v4/stdlib"
 
 	openai "github.com/sashabaranov/go-openai"
+
+	"github.com/didip/tollbooth/v7"
+	"github.com/didip/tollbooth/v7/limiter"
 )
 
 // Config 配置
@@ -90,13 +93,30 @@ func main() {
 		c.Next()
 	})
 
+	// 1秒最多允许请求 1次，1年后重置限制器
+	limiter := tollbooth.NewLimiter(1, &limiter.ExpirableOptions{DefaultExpirationTTL: 8760 * time.Hour})
+
+	limiter.SetIPLookups([]string{"RemoteAddr", "X-Forwarded-For", "X-Real-IP"})
+
 	router.POST("/v1/chat/completions", chat)
-	router.GET("buy", buy)
+	router.GET("buy", LimitHandler(limiter), buy)
 	router.GET("credits", credits)
 
 	addr := fmt.Sprintf(":%d", config.Port)
 
 	router.Run(addr)
+}
+
+func LimitHandler(lmt *limiter.Limiter) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		httpError := tollbooth.LimitByRequest(lmt, c.Writer, c.Request)
+		if httpError != nil {
+			c.Data(httpError.StatusCode, lmt.GetMessageContentType(), []byte(httpError.Message))
+			c.Abort()
+		} else {
+			c.Next()
+		}
+	}
 }
 
 func chat(c *gin.Context) {
@@ -173,23 +193,20 @@ func buy(c *gin.Context) {
 	})
 }
 
+func createUser(c *gin.Context) {
+	token := c.GetHeader("Authorization")
+	if token != "" || 58 != len(token) {
+		c.String(http.StatusBadRequest, "Invailde token")
+		return
+	}
+}
+
 func credits(c *gin.Context) {
-	chanStream := make(chan int, 10)
-	go func() {
-		defer close(chanStream)
-		for i := 0; i < 5; i++ {
-			chanStream <- i
-			time.Sleep(time.Second * 1)
-		}
-	}()
-	c.Stream(func(w io.Writer) bool {
-		if msg, ok := <-chanStream; ok {
-			fmt.Println(msg)
-			c.SSEvent("data", msg)
-			return true
-		}
-		return false
-	})
+	token := c.GetHeader("Authorization")
+	if token == "" || 58 != len(token) {
+		c.String(http.StatusBadRequest, "Invailde token")
+		return
+	}
 }
 
 // QueryDefaultIntByGinContext returns 指定 key 的 int 值
