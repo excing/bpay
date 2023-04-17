@@ -39,6 +39,9 @@ var ctx = context.Background()
 
 var openaiClient *openai.Client
 
+var db *sql.DB
+var entClient *ent.Client
+
 func main() {
 	var configFilepath string
 	flag.StringVar(&configFilepath, "config", "Server config file path", "")
@@ -55,7 +58,7 @@ func main() {
 		panic("Port can't equal 0")
 	}
 
-	db, err := sql.Open("pgx", "postgresql://"+config.PGSQL)
+	db, err = sql.Open("pgx", "postgresql://"+config.PGSQL)
 	if err != nil {
 		log.Fatalf("failed opening connection to postgres: %v", err)
 	}
@@ -68,13 +71,13 @@ func main() {
 		ent.Debug(),
 	}
 
-	client := ent.NewClient(opts...)
+	entClient = ent.NewClient(opts...)
 
 	// Run the auto migration tool.
-	if err := client.Schema.Create(ctx); err != nil {
+	if err := entClient.Schema.Create(ctx); err != nil {
 		log.Fatalf("failed creating schema resources: %v", err)
 	}
-	defer client.Close()
+	defer entClient.Close()
 
 	openaiConfig := openai.DefaultConfig(config.OpenAIToken)
 	openaiConfig.BaseURL = fmt.Sprintf("%v/v1", config.OpenAIAPI)
@@ -98,8 +101,10 @@ func main() {
 
 	limiter.SetIPLookups([]string{"RemoteAddr", "X-Forwarded-For", "X-Real-IP"})
 
+	router.Use(LimitHandler(limiter))
+
 	router.POST("/v1/chat/completions", chat)
-	router.GET("buy", LimitHandler(limiter), buy)
+	router.GET("buy", buy)
 	router.GET("credits", credits)
 
 	addr := fmt.Sprintf(":%d", config.Port)
