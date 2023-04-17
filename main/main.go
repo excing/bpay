@@ -25,21 +25,15 @@ import (
 
 // Config 配置
 type Config struct {
-	Port  int    `json:"port"`
-	PGSQL string `json:"pgsql"`
+	Port      int    `json:"port"`
+	PGSQL     string `json:"pgsql"`
+	OpenAIAPI string `json:"openaiApi"`
 }
 
 var config *Config
 var ctx = context.Background()
 
 var openaiClient *openai.Client
-
-func init() {
-	openaiConfig := openai.DefaultConfig("")
-	openaiConfig.BaseURL = "https://openai.blendiv.com/v1"
-
-	openaiClient = openai.NewClientWithConfig(openaiConfig)
-}
 
 func main() {
 	var configFilepath string
@@ -77,6 +71,11 @@ func main() {
 		log.Fatalf("failed creating schema resources: %v", err)
 	}
 	defer client.Close()
+
+	openaiConfig := openai.DefaultConfig("")
+	openaiConfig.BaseURL = fmt.Sprintf("%v/v1", config.OpenAIAPI)
+
+	openaiClient = openai.NewClientWithConfig(openaiConfig)
 
 	router := gin.Default()
 
