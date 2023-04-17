@@ -25,9 +25,10 @@ import (
 
 // Config 配置
 type Config struct {
-	Port      int    `json:"port"`
-	PGSQL     string `json:"pgsql"`
-	OpenAIAPI string `json:"openaiApi"`
+	Port        int    `json:"port"`
+	PGSQL       string `json:"pgsql"`
+	OpenAIAPI   string `json:"openaiApi"`
+	OpenAIToken string `json:"openaiToken"`
 }
 
 var config *Config
@@ -72,7 +73,7 @@ func main() {
 	}
 	defer client.Close()
 
-	openaiConfig := openai.DefaultConfig("")
+	openaiConfig := openai.DefaultConfig(config.OpenAIToken)
 	openaiConfig.BaseURL = fmt.Sprintf("%v/v1", config.OpenAIAPI)
 
 	openaiClient = openai.NewClientWithConfig(openaiConfig)
