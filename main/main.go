@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"com.blendiv.pay/ent"
+	"com.blendiv.pay/ent/user"
+	"com.blendiv.pay/math"
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
 	"github.com/gin-gonic/gin"
@@ -200,15 +202,38 @@ func buy(c *gin.Context) {
 
 func createUser(c *gin.Context) {
 	token := c.GetHeader("Authorization")
-	if token != "" || 58 != len(token) {
-		c.String(http.StatusBadRequest, "Invailde token")
+	if token != "" {
+		c.String(http.StatusBadRequest, "Invalid token")
 		return
+	}
+	ip := c.ClientIP()
+	count, _ := entClient.User.Query().Where(
+		user.IP(ip),
+	).Count(ctx)
+
+	if count < 10 {
+		c.String(http.StatusConflict, "Too many users from this IP")
+		return
+	}
+
+	token = math.New64BitID()
+
+	_, err := entClient.User.Create().
+		SetIP(ip).
+		SetToken(token).
+		SetFreeCredits(50).
+		Save(ctx)
+
+	if err != nil {
+		c.String(http.StatusInternalServerError, err.Error())
+	} else {
+		c.String(http.StatusOK, token)
 	}
 }
 
 func credits(c *gin.Context) {
 	token := c.GetHeader("Authorization")
-	if token == "" || 58 != len(token) {
+	if token == "" || 58 != len(token) || "Beare " != token[:7] {
 		c.String(http.StatusBadRequest, "Invailde token")
 		return
 	}
