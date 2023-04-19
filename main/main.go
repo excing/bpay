@@ -128,6 +128,15 @@ func LimitHandler(lmt *limiter.Limiter) gin.HandlerFunc {
 	}
 }
 
+func GetAuthorization(token string) (string, error) {
+	bearer := "Bearer "
+	aa := token[:len(bearer)]
+	if token == "" || 71 != len(token) || bearer != aa {
+		return "", fmt.Errorf("Invailde token")
+	}
+	return token[len(bearer):], nil
+}
+
 func chat(c *gin.Context) {
 	var req openai.ChatCompletionRequest
 	err := c.ShouldBindJSON(&req)
@@ -192,18 +201,24 @@ func chatCompletionStream(c *gin.Context, req openai.ChatCompletionRequest) {
 
 func buy(c *gin.Context) {
 	fee := QueryDefaultIntByGinContext(c, "fee", 0)
-	cip := c.ClientIP()
+	token, err := GetAuthorization(c.GetHeader(""))
+	if err != nil {
+		c.String(http.StatusBadRequest, err.Error())
+		return
+	}
 	// cfConnectingIP := c.GetHeader("CF-Connecting-IP")
 	// xForwardedFor := c.GetHeader("X-Forwarded-For")
 
-	c.JSON(200, gin.H{
-		"fee": fee,
-		"cip": cip,
-	})
+	user, err := entClient.User.Query().Where(user.Token(token)).First(ctx)
+	if err != nil {
+		c.String(http.StatusUnauthorized, err.Error())
+	}
+
+	//
 }
 
 func createUser(c *gin.Context) {
-	token := c.GetHeader("Authorization")
+	token, _ := GetAuthorization(c.GetHeader("Authorization"))
 	if token != "" {
 		c.String(http.StatusBadRequest, "Invalid token")
 		return
@@ -235,14 +250,11 @@ func createUser(c *gin.Context) {
 }
 
 func credits(c *gin.Context) {
-	token := c.GetHeader("Authorization")
-	bearer := "Bearer "
-	aa := token[:len(bearer)]
-	if token == "" || 71 != len(token) || bearer != aa {
-		c.String(http.StatusBadRequest, "Invailde token")
+	token, err := GetAuthorization(c.GetHeader("Authorization"))
+	if err != nil {
+		c.String(http.StatusBadRequest, err.Error())
 		return
 	}
-	token = token[len(bearer):]
 	user, err := entClient.User.Query().Where(user.Token(token)).First(ctx)
 	if err != nil {
 		c.String(http.StatusUnauthorized, err.Error())
