@@ -16,8 +16,12 @@ type User struct {
 // Fields of the User.
 func (User) Fields() []ent.Field {
 	return []ent.Field{
-		field.String("ip"),
-		field.String("token").Unique(),
+		field.String("ip").
+			StructTag(`json:"-"`),
+		field.String("token").
+			Unique().
+			StructTag(`json:"-"`),
+		// field.Enum("category").Values("guest", "user", "plus"),
 		field.Int("credits"),
 		field.Int("free_credits"),
 		field.Time("created_at").

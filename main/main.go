@@ -90,9 +90,10 @@ func main() {
 
 	router.Use(func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "*")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "*")
 		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(204)
+			c.Status(204)
 			return
 		}
 		c.Next()
@@ -103,11 +104,12 @@ func main() {
 
 	limiter.SetIPLookups([]string{"RemoteAddr", "X-Forwarded-For", "X-Real-IP"})
 
-	router.Use(LimitHandler(limiter))
+	// router.Use(LimitHandler(limiter))
 
-	router.POST("/v1/chat/completions", chat)
-	router.GET("buy", buy)
-	router.GET("credits", credits)
+	router.POST("/v1/chat/completions", LimitHandler(limiter), chat)
+	router.GET("buy", LimitHandler(limiter), buy)
+	router.GET("credits", LimitHandler(limiter), credits)
+	router.PUT("user", LimitHandler(limiter), createUser)
 
 	addr := fmt.Sprintf(":%d", config.Port)
 
@@ -211,7 +213,7 @@ func createUser(c *gin.Context) {
 		user.IP(ip),
 	).Count(ctx)
 
-	if count < 10 {
+	if 10 < count {
 		c.String(http.StatusConflict, "Too many users from this IP")
 		return
 	}
@@ -222,6 +224,7 @@ func createUser(c *gin.Context) {
 		SetIP(ip).
 		SetToken(token).
 		SetFreeCredits(50).
+		SetCredits(0).
 		Save(ctx)
 
 	if err != nil {
@@ -233,10 +236,19 @@ func createUser(c *gin.Context) {
 
 func credits(c *gin.Context) {
 	token := c.GetHeader("Authorization")
-	if token == "" || 58 != len(token) || "Beare " != token[:7] {
+	bearer := "Bearer "
+	aa := token[:len(bearer)]
+	if token == "" || 71 != len(token) || bearer != aa {
 		c.String(http.StatusBadRequest, "Invailde token")
 		return
 	}
+	token = token[len(bearer):]
+	user, err := entClient.User.Query().Where(user.Token(token)).First(ctx)
+	if err != nil {
+		c.String(http.StatusUnauthorized, err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, &user)
 }
 
 // QueryDefaultIntByGinContext returns 指定 key 的 int 值

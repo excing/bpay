@@ -3,31 +3,110 @@
 
 <head>
   <meta charset="UTF-8">
-  <title></title>
+  <title>Bpay Simple</title>
 </head>
 
-<body>
-  <script src="https://cdn.jsdelivr.net/npm/sse.js@0.6.1/lib/sse.min.js"></script>
-  <script>
-    var source = new SSE(
-      "http://localhost:3001/v1/chat/completions", {
-      headers: {
-        "Content-Type": "application/json",
+<div id="app">
+  <div>Hello, {{ name }}!</div>
+  <div>Credits(Free): {{ freeCreditNumber }}, Credits: {{ creditNumber }}</div>
+</div>
+
+<!-- <script src="https://cdn.jsdelivr.net/npm/sse.js@0.6.1/lib/sse.min.js"></script> -->
+<script src="https://cdn.staticfile.org/vue/3.0.5/vue.global.js"></script>
+<script>
+  const Key_User_Token = "user_token"
+
+  const { createApp } = Vue
+
+  createApp({
+    data() {
+      return {
+        name: localStorage.getItem(Key_User_Token),
+        freeCreditNumber: 0,
+        creditNumber: 0,
+      }
+    },
+    mounted() {
+      this.createUser()
+    },
+    methods: {
+      createUser() {
+        let _this = this
+        if (_this.name) {
+          _this.credits()
+          return
+        }
+        let status;
+        fetch("http://127.0.0.1:3001/user", {
+          method: "PUT",          
+        }).then(resp => {
+          status = resp.status
+          return resp.text()
+        }).then(text => {
+          console.log(status, text);
+          if (200 == status) {
+            localStorage.setItem(Key_User_Token, text)
+            _this.name = text
+            _this.credits()
+          } else {
+            throw new Error(text)
+          }
+        }).catch(e => {
+          console.error(e);
+        })
       },
-      method: "POST",
-      payload: JSON.stringify({ "model": "gpt-3.5-turbo", "messages": [{ "role": "system", "content": "你是一个友善的助手。" }, { "role": "user", "content": "Hi" }, { "role": "user", "content": "Hi" }], "max_tokens": 2000, "stream": true, "temperature": 0 }),
-    });
 
-    source.addEventListener("data", function (e) {
-      console.log(e.data);
-    });
+      credits() {
+        let _this = this
+        if (!_this.name) {
+          alert("Invaild token")
+          return
+        }
+        let status;
+        fetch("http://127.0.0.1:3001/credits", {
+          method: "GET",
+          headers: {
+            "Authorization": `Bearer ${_this.name}`,
+          },
+        }).then(resp => {
+          status = resp.status
+          return resp.text
+        }).then(text => {
+          if (200 == status) {
+            localStorage.setItem(Key_User_Token, text)
+            let user = JSON.parse(text)
+            _this.freeCreditNumber = user.freeCredits
+            _this.creditNumber = user.credits
+          }
+        }).catch(e => {
+          console.error(e);
+        })
+      },
 
-    source.addEventListener("error", function (e) {
-      console.error(e.data);
-    });
+      chat() {
+        var source = new SSE(
+          "http://localhost:3001/v1/chat/completions", {
+          headers: {
+            "Content-Type": "application/json",
+          },
+          method: "POST",
+          payload: JSON.stringify({ "model": "gpt-3.5-turbo", "messages": [{ "role": "system", "content": "你是一个友善的助手。" }, { "role": "user", "content": "Hi" }, { "role": "user", "content": "Hi" }], "max_tokens": 2000, "stream": true, "temperature": 0 }),
+        });
 
-    source.stream();
-  </script>
-</body>
+        source.addEventListener("data", function (e) {
+          console.log(e.data);
+        });
+
+        source.addEventListener("error", function (e) {
+          console.error(e.data);
+        });
+
+        source.stream();
+      }
+    },
+  }).mount('#app')
+
+  // createUser()
+</script>
 
 </html>
