@@ -35,5 +35,8 @@ func (Order) Edges() []ent.Edge {
 		edge.To("user", User.Type).
 			Required().
 			Unique(),
+		edge.To("product", Product.Type).
+			Required().
+			Unique(),
 	}
 }

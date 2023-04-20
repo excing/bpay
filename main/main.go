@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"com.blendiv.pay/ent"
+	"com.blendiv.pay/ent/product"
 	"com.blendiv.pay/ent/user"
 	"com.blendiv.pay/math"
 	"entgo.io/ent/dialect"
@@ -34,6 +35,7 @@ type Config struct {
 	PGSQL       string `json:"pgsql"`
 	OpenAIAPI   string `json:"openaiApi"`
 	OpenAIToken string `json:"openaiToken"`
+	ProductFile string `json:"productFile"`
 }
 
 var config *Config
@@ -81,6 +83,8 @@ func main() {
 	}
 	defer entClient.Close()
 
+	initProducts(config.ProductFile)
+
 	openaiConfig := openai.DefaultConfig(config.OpenAIToken)
 	openaiConfig.BaseURL = fmt.Sprintf("%v/v1", config.OpenAIAPI)
 
@@ -110,10 +114,43 @@ func main() {
 	router.GET("buy", LimitHandler(limiter), buy)
 	router.GET("credits", LimitHandler(limiter), credits)
 	router.PUT("user", LimitHandler(limiter), createUser)
+	router.GET("products", LimitHandler(limiter), products)
 
 	addr := fmt.Sprintf(":%d", config.Port)
 
 	router.Run(addr)
+}
+
+func initProducts(productFile string) {
+	var products []*ent.Product
+	bs, err := os.ReadFile(productFile)
+	if err != nil {
+		panic(err)
+	}
+	if err = json.Unmarshal(bs, &products); err != nil {
+		panic(err)
+	}
+	productCreateBulk := make([]*ent.ProductCreate, 0)
+	for _, v := range products {
+		exist, err := entClient.Product.Query().Where(product.Key(v.Key)).Exist(ctx)
+		if err != nil {
+			panic(err)
+		}
+		if exist {
+			continue
+		}
+		productCreateBulk = append(productCreateBulk,
+			entClient.Product.Create().
+				SetKey(v.Key).
+				SetName(v.Name).
+				SetDescription(v.Description).
+				SetListPrice(v.ListPrice).
+				SetSellingPrice(v.SellingPrice).
+				SetStatus(v.Status).
+				SetCredits(v.Credits),
+		)
+	}
+	entClient.Product.CreateBulk(productCreateBulk...).ExecX(ctx)
 }
 
 func LimitHandler(lmt *limiter.Limiter) gin.HandlerFunc {
@@ -212,9 +249,31 @@ func buy(c *gin.Context) {
 	user, err := entClient.User.Query().Where(user.Token(token)).First(ctx)
 	if err != nil {
 		c.String(http.StatusUnauthorized, err.Error())
+		return
 	}
 
-	//
+	order, err := entClient.Order.Create().
+		SetFee(fee).
+		SetIP(c.ClientIP()).
+		SetUser(user).
+		Save(ctx)
+	if err != nil {
+		c.String(http.StatusUnauthorized, err.Error())
+		return
+	}
+
+	requestBody := gin.H{
+		"mid":        "1186906271965384704",
+		"userId":     "1186906272414175232",
+		"outTradeNo": order.ID,
+		"totalFee":   0.01,
+		"notifyUrl":  "notify.html",
+		"successUrl": "successful.html",
+		"nonceStr":   math.New16BitID(),
+		"payWay":     1,
+	}
+
+	c.JSON(http.StatusOK, &requestBody)
 }
 
 func createUser(c *gin.Context) {
@@ -261,6 +320,17 @@ func credits(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, &user)
+}
+
+func products(c *gin.Context) {
+	products, err := entClient.Product.Query().Where(product.StatusIn(
+		product.StatusNew, product.StatusOnSale,
+	)).All(ctx)
+	if err != nil {
+		c.String(http.StatusInternalServerError, err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, &products)
 }
 
 // QueryDefaultIntByGinContext returns 指定 key 的 int 值
