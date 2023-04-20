@@ -237,8 +237,12 @@ func chatCompletionStream(c *gin.Context, req openai.ChatCompletionRequest) {
 }
 
 func buy(c *gin.Context) {
-	fee := QueryDefaultIntByGinContext(c, "fee", 0)
-	token, err := GetAuthorization(c.GetHeader(""))
+	productID, err := QueryIntByGinContext(c, "productID")
+	if err != nil {
+		c.String(http.StatusBadRequest, err.Error())
+		return
+	}
+	token, err := GetAuthorization(c.GetHeader("Authorization"))
 	if err != nil {
 		c.String(http.StatusBadRequest, err.Error())
 		return
@@ -252,10 +256,17 @@ func buy(c *gin.Context) {
 		return
 	}
 
+	product, err := entClient.Product.Get(ctx, productID)
+	if err != nil {
+		c.String(http.StatusBadRequest, err.Error())
+		return
+	}
+
 	order, err := entClient.Order.Create().
-		SetFee(fee).
+		SetFee(product.SellingPrice).
 		SetIP(c.ClientIP()).
 		SetUser(user).
+		SetProduct(product).
 		Save(ctx)
 	if err != nil {
 		c.String(http.StatusUnauthorized, err.Error())
